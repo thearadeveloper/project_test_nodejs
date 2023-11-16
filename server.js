@@ -1,0 +1,208 @@
+const express = require('express');
+const { User } = require('./model/models_user.js');
+const { Product } = require('./model/models_product.js');
+const app = express();
+const port = 3000;
+
+// Parse JSON request bodies
+app.use(express.json());
+
+// Define API routes
+
+// Get all users
+app.get('/users', async (req, res) => {
+  try {
+    const users = await User.findAll();
+    res.json( {'code':200,
+    'data':users});
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+// Create a new user
+app.post('/users', async (req, res) => {
+    try {
+      const user = await User.create(req.body);
+      res.status(201).json(user);
+    } catch (error) {
+      console.error('Error creating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  // Update a user
+app.put('/users/:id', async (req, res) => {
+    try {
+      const userId = req.params.id;
+      const { firstName, lastName, email } = req.body;
+  
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+  
+      user.firstName = firstName;
+      user.lastName = lastName;
+      user.email = email;
+      await user.save();
+  
+      res.json(user);
+    } catch (error) {
+      console.error('Error updating user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  // Delete a user
+app.delete('/users/:id', async (req, res) => {
+    try {
+      const userId = req.params.id;
+  
+      const user = await User.findByPk(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+  
+      await user.destroy();
+  
+      res.json({ message: 'User deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+// Get all Product
+
+app.get('/product', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page, 10);
+    const limit = parseInt(req.query.limit, 10);
+
+    // Validate and sanitize user input for page and limit
+    if (!Number.isInteger(page) || !Number.isInteger(limit) || page <= 0 || limit <= 0) {
+      return res.status(400).json({ error: 'Invalid parameters for pagination.' });
+    }
+
+    const offset = (page - 1) * limit;
+
+    const products = await Product.findAll({
+      offset: offset,
+      limit: limit,
+    });
+
+    // Check if there are more results
+    const hasMore = (page * limit) < (await Product.count());
+
+    // Modify the product data to include direct image URLs
+    const productsWithImageURLs = products.map(product => {
+      // Assuming product_image is stored as an image path
+      const imagePath = product.product_image;
+      const imageUrl = `${imagePath}`;
+      return { ...product.toJSON(), product_image: imageUrl };
+    });
+
+    res.json({
+      products: productsWithImageURLs,
+      currentPage: page,
+      totalPages: Math.ceil(await Product.count() / limit),
+      hasMore: hasMore,
+    });
+  } catch (error) {
+    console.error('Error fetching products:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Create a new product
+app.post('/product', async (req, res) => {
+    try {
+      const product = await Product.create(req.body);
+      res.status(201).json(product);
+    } catch (error) {
+      console.error('Error creating product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  // Update a product
+app.put('/product/:id', async (req, res) => {
+    try {
+      const productId = req.params.id;
+      const { product_name, price, color, qty ,qr_code,product_image} = req.body;
+  
+      const product = await Product.findByPk(productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+  
+      product.product_name = product_name;
+      product.price = price;
+      product.color = color;
+      product.qty = qty;
+      product.qr_code = qr_code;
+      product.product_image = product_image;
+      await product.save();
+      res.json(product);
+    } catch (error) {
+      console.error('Error updating product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  // Delete a user
+app.delete('/product/:id', async (req, res) => {
+    try {
+      const productId = req.params.id;
+  
+      const product = await Product.findByPk(productId);
+      if (!product) {
+        return res.status(404).json({ error: 'Product not found' });
+      }
+  
+      await product.destroy();
+  
+      res.json({ message: 'Product deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting Product:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+const multer = require('multer');
+const sharp = require('sharp'); 
+const fs = require('fs').promises;
+const path = require('path');
+
+// Set up multer for handling file uploads
+const storage = multer.memoryStorage();
+const upload = multer({ storage: storage });
+
+// Serve static files from the 'public' directory
+app.use(express.static('public'));
+
+app.post('/upload', upload.single('product_image'), async (req, res) => {
+  try {
+    // Generate a unique filename, or use some logic to create a unique identifier
+    const uniqueFilename = `${Date.now()}_temp.png`;
+
+    // Convert the uploaded image to PNG format using sharp
+    const convertedImageBuffer = await sharp(req.file.buffer)
+      .toFormat('png')
+      .toBuffer();
+
+    // Save the converted image to the 'public' directory
+    const publicDir = path.join(__dirname, 'public');
+    const imagePath = path.join(publicDir, uniqueFilename);
+    await fs.writeFile(imagePath, convertedImageBuffer);
+
+    // Respond with a success message and image URL
+    res.status(200).json({ status: 'success', imagePath: uniqueFilename });
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+
+
+// Start the server
+app.listen(port, () => {
+  console.log(`Server listening on port ${port}`);
+});
