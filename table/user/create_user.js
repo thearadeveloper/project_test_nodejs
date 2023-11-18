@@ -3,10 +3,8 @@ const { User } = require('../../model/models_user.js');
 async function createUser() {
   try {
     const user = await User.create({
-      firstName: 'John',
-      lastName: 'Doe',
-      gender: 'M',
-      email: 'johndoe@example.com',
+      username: 'John',
+      password: '123456',
     });
     console.log('User created:', user.toJSON());
   } catch (error) {

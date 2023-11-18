@@ -10,66 +10,69 @@ app.use(express.json());
 // Define API routes
 
 // Get all users
-app.get('/users', async (req, res) => {
-  try {
-    const users = await User.findAll();
-    res.json( {'code':200,
-    'data':users});
-  } catch (error) {
-    console.error('Error fetching users:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-// Create a new user
-app.post('/users', async (req, res) => {
-    try {
-      const user = await User.create(req.body);
-      res.status(201).json(user);
-    } catch (error) {
-      console.error('Error creating user:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-  // Update a user
-app.put('/users/:id', async (req, res) => {
-    try {
-      const userId = req.params.id;
-      const { firstName, lastName, email } = req.body;
+// app.get('/users', async (req, res) => {
+//   try {
+//     const users = await User.findAll();
+//     res.json( {'code':200,
+//     'data':users});
+//   } catch (error) {
+//     console.error('Error fetching users:', error);
+//     res.status(500).json({ error: 'Internal server error' });
+//   }
+// });
+// // Create a new user
+// app.post('/users', async (req, res) => {
+//     try {
+//       const user = await User.create(req.body);
+//       res.status(201).json(user);
+//     } catch (error) {
+//       console.error('Error creating user:', error);
+//       res.status(500).json({ error: 'Internal server error' });
+//     }
+//   });
+//   // Update a user
+// app.put('/users/:id', async (req, res) => {
+//     try {
+//       const userId = req.params.id;
+//       const { firstName, lastName, email } = req.body;
   
-      const user = await User.findByPk(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+//       const user = await User.findByPk(userId);
+//       if (!user) {
+//         return res.status(404).json({ error: 'User not found' });
+//       }
   
-      user.firstName = firstName;
-      user.lastName = lastName;
-      user.email = email;
-      await user.save();
+//       user.firstName = firstName;
+//       user.lastName = lastName;
+//       user.email = email;
+//       await user.save();
   
-      res.json(user);
-    } catch (error) {
-      console.error('Error updating user:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
-  // Delete a user
-app.delete('/users/:id', async (req, res) => {
-    try {
-      const userId = req.params.id;
+//       res.json(user);
+//     } catch (error) {
+//       console.error('Error updating user:', error);
+//       res.status(500).json({ error: 'Internal server error' });
+//     }
+//   });
+//   // Delete a user
+// app.delete('/users/:id', async (req, res) => {
+//     try {
+//       const userId = req.params.id;
   
-      const user = await User.findByPk(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-      }
+//       const user = await User.findByPk(userId);
+//       if (!user) {
+//         return res.status(404).json({ error: 'User not found' });
+//       }
   
-      await user.destroy();
+//       await user.destroy();
   
-      res.json({ message: 'User deleted successfully' });
-    } catch (error) {
-      console.error('Error deleting user:', error);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
+//       res.json({ message: 'User deleted successfully' });
+//     } catch (error) {
+//       console.error('Error deleting user:', error);
+//       res.status(500).json({ error: 'Internal server error' });
+//     }
+//   });
+
+
+
 // Get all Product
 
 app.get('/product', async (req, res) => {
@@ -87,6 +90,9 @@ app.get('/product', async (req, res) => {
     const products = await Product.findAll({
       offset: offset,
       limit: limit,
+      order: [
+        ['id', 'DESC'],
+    ],
     });
 
     // Check if there are more results
@@ -200,7 +206,134 @@ app.post('/upload', upload.single('product_image'), async (req, res) => {
   }
 });
 
+const bcrypt = require('bcrypt');
+const bodyParser = require('body-parser');
+app.use(bodyParser.json());
 
+// Register a new user
+app.post('/register', async (req, res) => {
+  try {
+    const { username, password, email, gender, phoneNumber, avatar } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required.' });
+    }
+
+    const existingUser = await User.findOne({ where: { username } });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'Username is already taken.' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create({
+      username,
+      password: hashedPassword,
+      email,
+      gender,
+      phoneNumber,
+      avatar,
+    });
+
+    res.status(201).json({
+      message: 'User registered successfully.',
+      userId: newUser.id,
+    });
+  } catch (error) {
+    console.error('Error registering user:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Log in a user
+app.post('/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required.' });
+    }
+
+    const user = await User.findOne({ where: { username } });
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+    const passwordMatch = await bcrypt.compare(password, user.password);
+
+    if (passwordMatch) {
+      // Passwords match, login successful
+      return res.json({ message: 'Login successful.', userId: user.id });
+    } else {
+      // Passwords do not match
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+  } catch (error) {
+    console.error('Error logging in user:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Fetch user info
+app.get('/user/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const user = await User.findByPk(userId, {
+      attributes: { exclude: ['password'] }, // Exclude password from the response
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching user info:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
+// Update user info
+app.put('/user/:userId', async (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const { newUsername, email, gender, phoneNumber, avatar } = req.body;
+
+    if (!newUsername) {
+      return res.status(400).json({ error: 'New username is required.' });
+    }
+
+    const existingUser = await User.findOne({ where: { username: newUsername } });
+
+    if (existingUser && existingUser.id !== userId) {
+      return res.status(400).json({ error: 'Username is already taken.' });
+    }
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // Update username and other user info fields
+    user.username = newUsername;
+    user.email = email || user.email;
+    user.gender = gender || user.gender;
+    user.phoneNumber = phoneNumber || user.phoneNumber;
+    user.avatar = avatar || user.avatar;
+
+    await user.save();
+
+    res.json({ message: 'User info updated successfully.' });
+  } catch (error) {
+    console.error('Error updating user info:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
 
 // Start the server
 app.listen(port, () => {
