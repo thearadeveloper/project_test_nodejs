@@ -209,6 +209,7 @@ app.post('/upload', upload.single('product_image'), async (req, res) => {
 const bcrypt = require('bcrypt');
 const bodyParser = require('body-parser');
 app.use(bodyParser.json());
+const jwt = require('jsonwebtoken');
 
 // Register a new user
 app.post('/register', async (req, res) => {
@@ -236,9 +237,13 @@ app.post('/register', async (req, res) => {
       avatar,
     });
 
+    // Generate and sign a token
+    const token = jwt.sign({ userId: newUser.id }, 'your-secret-key', { expiresIn: '1h' });
+
     res.status(201).json({
       message: 'User registered successfully.',
       userId: newUser.id,
+      token,
     });
   } catch (error) {
     console.error('Error registering user:', error);
@@ -264,8 +269,14 @@ app.post('/login', async (req, res) => {
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (passwordMatch) {
-      // Passwords match, login successful
-      return res.json({ message: 'Login successful.', userId: user.id });
+      // Passwords match, generate and sign a token
+      const token = jwt.sign({ userId: user.id }, 'your-secret-key', { expiresIn: '1h' });
+
+      return res.json({
+        message: 'Login successful.',
+        userId: user.id,
+        token,
+      });
     } else {
       // Passwords do not match
       return res.status(401).json({ error: 'Invalid username or password.' });
