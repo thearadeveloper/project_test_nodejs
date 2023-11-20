@@ -119,15 +119,57 @@ app.get('/product', async (req, res) => {
 });
 
 // Create a new product
-app.post('/product', async (req, res) => {
-    try {
-      const product = await Product.create(req.body);
-      res.status(201).json(product);
-    } catch (error) {
-      console.error('Error creating product:', error);
-      res.status(500).json({ error: 'Internal server error' });
+// Establish one-to-many relationship
+User.hasMany(Product, { as: 'products', foreignKey: 'userId' });
+Product.belongsTo(User, { foreignKey: 'userId' });
+
+// Middleware for authentication
+const authenticateToken = (req, res, next) => {
+  const token = req.headers.authorization && req.headers.authorization.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  jwt.verify(token, 'your-secret-key', (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Forbidden' });
     }
+    req.user = user;
+    next();
   });
+};
+
+app.use(authenticateToken);
+
+// Create a product for the logged-in user
+app.post('/product', async (req, res) => {
+  try {
+    const { product_name, price, color, qty, qr_code, product_image } = req.body;
+    const userId = req.user.userId; // Extracted from the JWT token
+
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found.' });
+    }
+
+    const newProduct = await Product.create({
+      product_name,
+      price,
+      color,
+      qty,
+      qr_code,
+      product_image,
+      userId: user.id,
+    });
+
+    res.status(201).json({ message: 'Product created successfully.', productId: newProduct.id });
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
   // Update a product
 app.put('/product/:id', async (req, res) => {
     try {
